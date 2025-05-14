@@ -1,0 +1,228 @@
+---
+title: "The Final Project"
+author: "Antonio Gonzalez"
+date: "`04/27/2025`"
+output: pdf_document
+urlcolor: blue
+---
+<!-- The author of this template is Dr. Gordan Zitkovic.-->
+<!-- The code chunk below contains some settings that will  -->
+<!-- make your R code look better in the output pdf file.  -->
+<!-- If you are curious about what each option below does, -->
+<!-- go to https://yihui.org/knitr/options/ -->
+<!-- If not, feel free to disregard everything ...  -->
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  fig.align="center",
+  fig.pos="t",
+  strip.white = TRUE
+)
+```
+<!-- ... down to here. -->
+
+---
+
+## Problem #1 **($45$ points)**
+Solve Problem **9.7.4** from the textbook (page 399). 
+
+I am first going to generate data points that appear to be non-linearly separable. 
+```{r}
+set.seed(2)
+
+x <- matrix(rnorm(100 * 2), ncol = 2)
+
+x[1:25, ] <- x[1:25, ] + 2
+x[26:50, ] <- x[26:50, ] - 2
+
+x[51:75, 1] <- x[51:75, 1] - 2
+x[51:75, 2] <- x[51:75, 2] + 2
+
+x[76:100, 1] <- x[76:100, 1] + 2
+x[76:100, 2] <- x[76:100, 2] - 2
+
+y <- c(rep(1, 50), rep(-1, 50))
+
+# Create dataframe
+dat <- data.frame(x, y = as.factor(y))
+
+# Plot
+plot(x, col = ifelse(y == 1, "blue", "red"), pch = 19,
+     main = "Simulated Values",
+     xlab = "x1", ylab = "x2")
+
+```
+The plot above shows the red class in quadrants II and IV and the blue class in quadrant I and III, so obviously they are not linearly separable.
+Let's get our training data indices.
+
+```{r}
+#svm, but we first we encode
+set.seed(2)
+mydata <- data.frame(x = x, y = as.factor(y))
+svmtrain = sample(100, 80)
+```
+
+We will now use cross-validation to choose the best cost for both models and the best degree value for the polynomial kernel.
+
+```{r}
+library(e1071)
+set.seed(2)
+
+classifier.tune.out <- tune(svm, y ~ ., data = mydata, kernel = "linear", 
+    ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+
+poly.tune.out <- tune(svm, y ~ ., data = mydata, kernel = "polynomial", 
+    ranges = list(degree = c(2, 3, 4, 5),
+                  cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+```
+
+Let's store the best models.
+
+```{r}
+bestclassmod <- classifier.tune.out$best.model
+bestpolymod <- poly.tune.out$best.model
+
+summary(bestclassmod)
+summary(bestpolymod)
+```
+Now we will plot the SVMs to see how well the decision boundary classifies each point.
+
+```{r}
+plot(bestclassmod, mydata[svmtrain,], main = 'SVC plot')
+plot(bestpolymod, mydata[svmtrain,], main = 'SVM plot')
+```
+For the support vector classifier (SVC) with a linear kernel, we observe several misclassifications, particularly in the bottom-right quadrant. In contrast, the support vector machine (SVM) with a polynomial kernel performs noticeably better, misclassifying fewer points overall. It's also worth noting that the SVM with the polynomial kernel uses more support vectors, which suggests a more flexible decision boundary that better captures the non-linear structure in the data.
+
+```{r}
+ypred_class = predict(bestclassmod, mydata[svmtrain, c(1, 2)])
+tab1 <- table(Predicted = ypred_class, Actual = mydata[svmtrain, "y"])
+1 - (sum(diag(tab1))/sum(tab1))
+
+ypred_poly = predict(bestpolymod, mydata[svmtrain, c(1, 2)])
+tab2 <- table(Predicted = ypred_poly, Actual = mydata[svmtrain, "y"])
+1 - (sum(diag(tab2))/sum(tab2))
+```
+
+Based on the misclassification errors, the SVM with the polynomial kernel performs best on the training data, achieving an error rate of $5%$, compared to the support vector classifier (SVC) with a linear kernel, which has a higher error rate of $31.25%$.
+
+```{r}
+ypred_classtest = predict(bestclassmod, mydata[-svmtrain, c(1, 2)])
+tab1 <- table(Predicted = ypred_classtest, Actual = mydata[-svmtrain, "y"])
+1 - (sum(diag(tab1))/sum(tab1))
+
+ypred_polytest = predict(bestpolymod, mydata[-svmtrain, c(1, 2)])
+tab2 <- table(Predicted = ypred_polytest, Actual = mydata[-svmtrain, "y"])
+1 - (sum(diag(tab2))/sum(tab2))
+```
+
+```{r}
+plot(bestclassmod, mydata[-svmtrain,])
+plot(bestpolymod, mydata[-svmtrain,])
+```
+The performance of the SVMs on the testing data closely resembles the results from the training data. The plots reveal that the polynomial kernel SVM correctly classifies nearly all test points, with only one point lying exactly on the decision boundary. In contrast, the linear SVC visibly misclassifies two points. Additionally, the linear SVC appears to classify nearly all points as support vectors, resulting in a very wide margin.
+
+Numerically, the SVC has a misclassification error of $20%$, while the polynomial kernel SVM achieves a lower error of just $5%$. These results indicate that the polynomial SVM generalizes well and outperforms the linear SVC on both training and testing data, suggesting that it is neither underfitting nor overfitting the data.
+
+## Problem #2 **($5\times 11=55$ points)**
+Solve Problem **8.4.9** from the textbook (pages 363-364). 
+## part a
+
+```{r}
+library(ISLR2)
+library(tree)
+data(OJ) #load data
+
+set.seed(1)
+train.ind <- sample(1:nrow(OJ), 800)
+train <- OJ[train.ind,]
+test <- OJ[-train.ind,]
+```
+
+## part b
+Now we fit the tree.
+```{r}
+tree.oj <- tree(Purchase ~ . , data = train)
+summary(tree.oj)
+``` 
+The tree has nine terminal nodes and a misclassification error of 0.1588
+
+## part c
+
+```{r}
+tree.oj
+```
+Node 8, a terminal node, comes from split LoyalCH < 0.280875, 59 observations ended up at this node, there's a deviance of 10.14, leads to the prediction of Minute Maid (MM) being purchased and the probability of MM being purchased is 0.98305 and CH is 0.01695. 
+
+## part d
+
+```{r}
+plot(tree.oj)
+text(tree.oj, pretty = 0)
+```
+Based on the tree, the most important indicator in determining the purchase of Minute Maid or Citrus Hill seems to be customer brand loyalty for Citrus Hill. Since `LoyalCH` appears a lot it may seems we might have to prune this tree. It seems the other important indicators are `PriceDiff`, `ListPriceDiff` , `PctDiscMM`, and `SpecialCH`. 
+
+##part e
+
+```{r}
+tree.pred <- predict(tree.oj, newdata = test, type = 'class')
+confusion <- table(tree.pred, test$Purchase)
+confusion
+test.error <- 1 - sum(diag(confusion))/sum(confusion)
+test.error
+```
+After producing our confusion matrix, it seems our testing error rate is 17.03%. 
+
+##part f
+
+```{r}
+set.seed(2)
+cv.oj <- cv.tree(tree.oj, FUN = prune.misclass)
+cv.oj
+```
+It seems that size and 8 and 9 have the lowest deviance so maybe we don't have to prune this tree.
+Let's check this elbow plot.
+
+## part g
+```{r}
+plot(cv.oj$size, cv.oj$dev, type = "b", xlab = "Tree Size", ylab = "CV Error")
+```
+# part h
+According to the plot, it seems the optimal tree size is 4.
+
+#part i
+```{r}
+prune.oj <- prune.misclass(tree.oj, best = 4)
+plot(prune.oj)
+text(prune.oj, pretty = 0)
+summary(prune.oj)
+```
+
+## part j
+```{r}
+train.pred.full <- predict(tree.oj, train, type = "class")
+train.error.full <- mean(train.pred.full != train$Purchase)
+
+train.pred.pruned <- predict(prune.oj, train, type = "class")
+train.error.pruned <- mean(train.pred.pruned != train$Purchase)
+
+train.error.full
+train.error.pruned
+```
+
+The training error for the pruned tree ended up being higher, which suggests that maybe pruning wasn’t necessary or we might’ve overpruned. I based the pruning decision on the elbow plot, but now I see that a tree size of eight or nine actually gave the lowest cross-validated error. So maybe, pruning to size four may have been too aggressive, error-wise.
+
+##part k
+```{r}
+test.pred.full <- predict(tree.oj, test, type = "class")
+test.error.full <- mean(test.pred.full != test$Purchase)
+
+test.pred.pruned <- predict(prune.oj, test, type = "class")
+test.error.pruned <- mean(test.pred.pruned != test$Purchase)
+
+test.error.full
+test.error.pruned
+```
+
+The test error actually went up for the unpruned tree, from 0.15875 to 0.17037, while the pruned tree had a slightly higher test error of 0.17778. So even though the pruned tree didn’t beat the unpruned one on test accuracy, the difference isn’t huge. It looks like pruning helped reduce overfitting a bit, and both trees ended up with pretty similar performance overall. 
+
+Plus, pruning makes the tree simpler and easier to interpret, which is helpful when you want to understand or explain the model’s decisions.
